@@ -2,26 +2,64 @@ package middle;
 
 import java.sql.*;
 import java.util.ArrayList;
-
-import middle.data.Mysql;
-
+import java.util.Arrays;
+import java.util.List;
+import middle.data.*;
+import java.util.Set;
 
 
 public class Main {
-
+    private static String sqlKey = "1_sql_key2015";
     public static void main(String[] args) {
-        ArrayList<String> sqls = new ArrayList<String>();
-        //从队列中取出sql数据放入list中
-        for(int i = 0;i<1000;i++){
-            sqls.add("INSERT INTO users(name,email,password)VALUES('test_"+(i+4102)+"','test"+(i+4002)+"@test.com','12324')");
-        }
-        //初始化数据库连接池
         Mysql pool = Mysql.getInstance();
-        //初始化sql执行线程池
-        SqlThread st = new SqlThread(sqls,pool);
-        for(int i = 0 ; i <4;i++){
-            new Thread(st,(i+1)+"号执行sql线程").start();
+        JavaRedis jRedis = JavaRedis.getInstance();
+        //从队列中取出sql数据放入list中
+//        for(int i = 0;i<1000;i++){
+//            jRedis.sortAdd(sqlKey,
+//                    "INSERT INTO users(name,email,password)VALUES('test_" + (i + 1102) + "','test" + (i + 1002) + "@test.com','12324')"
+//            ,System.currentTimeMillis()
+//            );
+//        }
+
+        while(true){
+            Long count = jRedis.getSortCount(sqlKey);
+            if(count>0){
+                int pageSize = 1000;
+                //初始化数据库连接池
+                Long allPage = count%pageSize==0? count/pageSize:(count/pageSize+1);
+                for(int page=0;page<allPage;page++){
+                    Set<String> list = jRedis.getSortList(sqlKey,page,pageSize);
+                    for( String s:list ){
+                        //移除该条纪录
+                        jRedis.SortRemove(sqlKey,s);
+                        String[] str= s.split(";");
+                        if(str.length>0){
+                            new SqlThread(str[0],pool).run();
+                        }
+                    }
+                }
+                System.out.println("共"+SqlThread.threadCount+"条线程,等待线程执行结束！");
+            }
+            else{
+                System.out.println("等待队列新数据中！");
+            }
         }
+
+//        ArrayList<String> sqls = new ArrayList<String>();
+//        //从队列中取出sql数据放入list中
+//        for(int i = 0;i<100000;i++){
+//            sqls.add("INSERT INTO users(name,email,password)VALUES('test_"+(i+1102)+"','test"+(i+1002)+"@test.com','12324')");
+//        }
+//        System.out.println("总队列数:" + sqls.size() );
+//        //初始化数据库连接池
+//        Mysql pool = Mysql.getInstance();
+//        //初始化sql执行线程池
+//        SqlThread st = new SqlThread(sqls,pool);
+//        //同步创建所有线程
+//        for(int i = 0 ; i <SqlThread.threadCount;i++){
+//            new Thread(st,i+1+"").start();
+//        }
+
     }
 
     public static void test(){
