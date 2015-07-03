@@ -90,7 +90,6 @@ public class JavaRedis {
     }
 
     public void sortAdd(String key,String value,Long score){
-        value = value+";"+score;
         shardedJedis.zadd(key, score,value );
     }
 
